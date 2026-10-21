@@ -172,19 +172,17 @@ func (w *Worker) runConsumerLoop(ctx context.Context, slotID int) {
 }
 
 func (w *Worker) processRedisMessage(ctx context.Context, xmsg redis.XMessage) {
-	defer func() {
-		// Always ACK the message from the stream group once dealt with
-		_ = w.queue.Ack(ctx, xmsg.ID)
-	}()
-
 	rawPayload, ok := xmsg.Values["payload"].(string)
 	if !ok {
+		_ = w.queue.Ack(ctx, xmsg.ID)
 		return
 	}
 
 	var msg queue.JobMessage
 	if err := json.Unmarshal([]byte(rawPayload), &msg); err != nil {
 		log.Printf("[%s] Corrupted message payload: %v\n", w.workerName, err)
+		// Corrupted payload cannot be processed: ack to prevent infinite loop
+		_ = w.queue.Ack(ctx, xmsg.ID)
 		return
 	}
 
@@ -193,7 +191,9 @@ func (w *Worker) processRedisMessage(ctx context.Context, xmsg redis.XMessage) {
 	// 1. Atomic claim in PostgreSQL with row-level locking (guarantees safe concurrency across multiple workers)
 	job, err := w.jobRepo.ClaimJobAtomic(ctx, jobID, w.workerName)
 	if err != nil {
-		// Job may have already been claimed, cancelled, or completed by another worker
+		// Job may have already been claimed, cancelled, or completed by another worker.
+		// Ack message so consumer group doesn't hold it indefinitely.
+		_ = w.queue.Ack(ctx, xmsg.ID)
 		return
 	}
 
@@ -212,6 +212,8 @@ func (w *Worker) processRedisMessage(ctx context.Context, xmsg redis.XMessage) {
 		newStatus, failErr := w.jobRepo.FailOrRetryJob(ctx, job.ID, job.Version, err.Error(), &nextRetry)
 		if failErr != nil {
 			log.Printf("[%s] Failed to record failure for job %s: %v\n", w.workerName, job.ID, failErr)
+			// Do NOT Ack here if database write failed; allow recovery to re-attempt
+			return
 		}
 
 		w.cache.Invalidate(ctx, job.OrganizationID, job.ID)
@@ -223,6 +225,9 @@ func (w *Worker) processRedisMessage(ctx context.Context, xmsg redis.XMessage) {
 			// Schedule next retry
 			_ = w.queue.ScheduleJob(ctx, &msg, nextRetry)
 		}
+
+		// Outcome safely persisted: acknowledge stream message
+		_ = w.queue.Ack(ctx, xmsg.ID)
 		return
 	}
 
@@ -230,9 +235,13 @@ func (w *Worker) processRedisMessage(ctx context.Context, xmsg redis.XMessage) {
 	resultBytes, _ := json.Marshal(result)
 	if err := w.jobRepo.CompleteJob(ctx, job.ID, job.Version, resultBytes); err != nil {
 		log.Printf("[%s] Failed to mark job %s as completed: %v\n", w.workerName, job.ID, err)
+		// Database write failed: do NOT acknowledge so crash recovery / PEL claim can handle it
+		return
 	}
 
 	w.cache.Invalidate(ctx, job.OrganizationID, job.ID)
+	// Success safely persisted in PostgreSQL: acknowledge stream message
+	_ = w.queue.Ack(ctx, xmsg.ID)
 }
 
 func (w *Worker) executeJob(ctx context.Context, job *models.Job) (map[string]interface{}, error) {

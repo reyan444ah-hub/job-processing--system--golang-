@@ -35,9 +35,9 @@ func main() {
 	}
 	defer db.Close()
 
-	// Run migrations
+	// Run migrations: must succeed before serving traffic
 	if err := db.RunMigrations("migrations/000001_init_schema.sql"); err != nil {
-		log.Printf("Warning: Migration check: %v (continuing)", err)
+		log.Fatalf("Fatal: Database migration failed: %v", err)
 	}
 
 	// 2. Connect to Redis
@@ -99,12 +99,24 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService)
 	jobHandler := handlers.NewJobHandler(jobService)
 
-	// Root health check
+	// Root health check: verifies PostgreSQL and Redis readiness
 	router.GET("/health", func(c *gin.Context) {
-		redisOk := jobCache.CheckRedisHealthy(c.Request.Context())
-		c.JSON(http.StatusOK, gin.H{
-			"status":   "ok",
-			"postgres": "connected",
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
+		defer cancel()
+
+		pgOk := db.PingContext(ctx) == nil
+		redisOk := jobCache.CheckRedisHealthy(ctx)
+
+		status := "ok"
+		httpCode := http.StatusOK
+		if !pgOk || !redisOk {
+			status = "degraded"
+			httpCode = http.StatusServiceUnavailable
+		}
+
+		c.JSON(httpCode, gin.H{
+			"status":   status,
+			"postgres": pgOk,
 			"redis":    redisOk,
 			"time":     time.Now().UTC(),
 		})

@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
 	"distributed-job-system/internal/api/middleware"
+	"distributed-job-system/internal/repository"
 	"distributed-job-system/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -37,7 +39,15 @@ func (h *JobHandler) SubmitJob(c *gin.Context) {
 
 	job, deduplicated, err := h.jobService.SubmitJob(c.Request.Context(), orgID, idempotencyKey, &req)
 	if err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		if errors.Is(err, service.ErrIdempotencyConflict) {
+			c.JSON(http.StatusConflict, gin.H{"error": "idempotency key was previously used with a different request payload"})
+			return
+		}
+		if errors.Is(err, service.ErrIdempotencyKeyPending) {
+			c.JSON(http.StatusConflict, gin.H{"error": "concurrent request with the same idempotency key is currently being processed"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -116,6 +126,10 @@ func (h *JobHandler) CancelJob(c *gin.Context) {
 
 	job, err := h.jobService.CancelJob(c.Request.Context(), orgID, jobID)
 	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "job not found or access denied"})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -142,6 +156,10 @@ func (h *JobHandler) RetryJob(c *gin.Context) {
 
 	job, err := h.jobService.RetryJob(c.Request.Context(), orgID, jobID)
 	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "job not found or access denied"})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

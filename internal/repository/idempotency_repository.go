@@ -83,3 +83,10 @@ func (r *IdempotencyRepository) SaveResponse(ctx context.Context, orgID uuid.UUI
 	_, err := r.db.ExecContext(ctx, query, statusCode, responseBody, orgID, key)
 	return err
 }
+
+// DeleteRecord deletes an idempotency key (used to rollback stuck pending keys upon creation failure)
+func (r *IdempotencyRepository) DeleteRecord(ctx context.Context, orgID uuid.UUID, key string) error {
+	query := `DELETE FROM idempotency_keys WHERE organization_id = $1 AND key = $2`
+	_, err := r.db.ExecContext(ctx, query, orgID, key)
+	return err
+}

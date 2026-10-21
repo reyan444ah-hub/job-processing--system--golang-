@@ -126,7 +126,14 @@ func (q *RedisQueue) SweepScheduledJobs(ctx context.Context) (int, error) {
 
 		var msg JobMessage
 		if err := json.Unmarshal([]byte(raw), &msg); err == nil {
-			_, _ = q.Publish(ctx, &msg)
+			if _, err := q.Publish(ctx, &msg); err != nil {
+				// Prevent job loss: re-add to scheduled set with current score
+				_ = q.client.ZAdd(ctx, ScheduledZSetKey, redis.Z{
+					Score:  float64(time.Now().UnixMilli()),
+					Member: raw,
+				}).Err()
+				continue
+			}
 			count++
 		}
 	}

@@ -60,7 +60,7 @@ func (s *AuthService) Register(ctx context.Context, orgName, email, password str
 		return nil, nil, "", "", fmt.Errorf("failed to create user: %w", err)
 	}
 
-	accessToken, err := s.generateAccessToken(user)
+	accessToken, err := s.GenerateAccessToken(user)
 	if err != nil {
 		return nil, nil, "", "", err
 	}
@@ -84,7 +84,7 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (*model
 		return nil, "", "", errors.New("invalid email or password")
 	}
 
-	accessToken, err := s.generateAccessToken(user)
+	accessToken, err := s.GenerateAccessToken(user)
 	if err != nil {
 		return nil, "", "", err
 	}
@@ -109,7 +109,7 @@ func (s *AuthService) Refresh(ctx context.Context, rawRefreshToken string) (stri
 		return "", "", errors.New("user not found")
 	}
 
-	newAccessToken, err := s.generateAccessToken(user)
+	newAccessToken, err := s.GenerateAccessToken(user)
 	if err != nil {
 		return "", "", err
 	}
@@ -127,7 +127,8 @@ func (s *AuthService) Logout(ctx context.Context, userID uuid.UUID) error {
 	return s.repo.RevokeAllUserTokens(ctx, userID)
 }
 
-func (s *AuthService) generateAccessToken(user *models.User) (string, error) {
+// GenerateAccessToken creates a signed JWT access token for a user
+func (s *AuthService) GenerateAccessToken(user *models.User) (string, error) {
 	claims := JWTClaims{
 		UserID:         user.ID,
 		OrganizationID: user.OrganizationID,

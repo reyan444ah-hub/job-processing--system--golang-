@@ -17,6 +17,12 @@ import (
 	"github.com/google/uuid"
 )
 
+var (
+	ErrIdempotencyConflict   = errors.New("idempotency key was previously used with a different request payload")
+	ErrIdempotencyKeyPending = errors.New("concurrent request with the same idempotency key is currently being processed")
+	ErrNotFound              = errors.New("resource not found or access denied")
+)
+
 type SubmitJobRequest struct {
 	Type        string          `json:"type" binding:"required"`
 	Payload     json.RawMessage `json:"payload" binding:"required"`
@@ -60,6 +66,11 @@ func (s *JobService) SubmitJob(ctx context.Context, orgID uuid.UUID, idempotency
 			// Existing key found: fetch previous record
 			existingRecord, err := s.idempotencyRepo.GetRecord(ctx, orgID, idempotencyKey)
 			if err == nil && existingRecord != nil {
+				// Reusing the same key with a different payload must be rejected
+				if existingRecord.RequestHash != reqHash {
+					return nil, false, ErrIdempotencyConflict
+				}
+
 				if existingRecord.Status == "processed" && len(existingRecord.ResponseBody) > 0 {
 					var existingJob models.Job
 					if err := json.Unmarshal(existingRecord.ResponseBody, &existingJob); err == nil {
@@ -68,7 +79,7 @@ func (s *JobService) SubmitJob(ctx context.Context, orgID uuid.UUID, idempotency
 					}
 				}
 				// If status is still pending, another concurrent request is currently creating it
-				return nil, true, fmt.Errorf("concurrent request with the same idempotency key is currently being processed")
+				return nil, true, ErrIdempotencyKeyPending
 			}
 		} else if err != nil {
 			return nil, false, fmt.Errorf("failed to process idempotency key: %w", err)
@@ -95,6 +106,9 @@ func (s *JobService) SubmitJob(ctx context.Context, orgID uuid.UUID, idempotency
 	// 2. Transactional persistence: DB writes Job + Outbox atomically
 	createdJob, err := s.jobRepo.CreateJobWithOutbox(ctx, job)
 	if err != nil {
+		if idempotencyKey != "" {
+			_ = s.idempotencyRepo.DeleteRecord(ctx, orgID, idempotencyKey)
+		}
 		return nil, false, fmt.Errorf("failed to create job: %w", err)
 	}
 

@@ -135,8 +135,12 @@ func (p *OutboxPublisher) DispatchEvent(ctx context.Context, ev *models.OutboxEv
 		"payload":         json.RawMessage(ev.Payload),
 		"timestamp":       ev.CreatedAt.Format(time.RFC3339Nano),
 	})
-	if err == nil {
-		_ = p.redisClient.Publish(ctx, channel, broadcastMsg).Err()
+	if err != nil {
+		return fmt.Errorf("failed to marshal broadcast event: %w", err)
+	}
+
+	if err := p.redisClient.Publish(ctx, channel, broadcastMsg).Err(); err != nil {
+		return fmt.Errorf("failed to broadcast event to Redis Pub/Sub: %w", err)
 	}
 
 	return nil
