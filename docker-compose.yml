@@ -1,0 +1,97 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: distributed_jobs_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: distributed_jobs
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./migrations/000001_init_schema.sql:/docker-entrypoint-initdb.d/000001_init_schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: distributed_jobs_redis
+    restart: always
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: distributed_jobs_api
+    restart: always
+    environment:
+      PORT: "8080"
+      APP_ENV: "production"
+      DATABASE_URL: "postgres://postgres:postgrespassword@postgres:5432/distributed_jobs?sslmode=disable"
+      REDIS_ADDR: "redis:6379"
+      REDIS_PASSWORD: ""
+      JWT_SECRET: "production-secure-distributed-job-secret-key-2026"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: distributed_jobs_worker_1
+    restart: always
+    command: ["/app/worker"]
+    environment:
+      WORKER_NAME: "worker-instance-1"
+      WORKER_CONCURRENCY: "5"
+      DATABASE_URL: "postgres://postgres:postgrespassword@postgres:5432/distributed_jobs?sslmode=disable"
+      REDIS_ADDR: "redis:6379"
+      REDIS_PASSWORD: ""
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: distributed_jobs_worker_2
+    restart: always
+    command: ["/app/worker"]
+    environment:
+      WORKER_NAME: "worker-instance-2"
+      WORKER_CONCURRENCY: "5"
+      DATABASE_URL: "postgres://postgres:postgrespassword@postgres:5432/distributed_jobs?sslmode=disable"
+      REDIS_ADDR: "redis:6379"
+      REDIS_PASSWORD: ""
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:

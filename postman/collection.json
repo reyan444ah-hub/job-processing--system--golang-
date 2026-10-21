@@ -1,0 +1,258 @@
+{
+	"info": {
+		"_postman_id": "a91834cb-165b-426c-9a4f-561b34e5a901",
+		"name": "Distributed Job Processing Platform",
+		"description": "Comprehensive Postman collection for the Distributed Job Processing & Real-Time Event Platform.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Auth",
+			"item": [
+				{
+					"name": "Register User & Organization",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"organization_name\": \"Acme Corp\",\n    \"email\": \"admin@acme.com\",\n    \"password\": \"SecurePass123!\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "register"]
+						}
+					}
+				},
+				{
+					"name": "Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"admin@acme.com\",\n    \"password\": \"SecurePass123!\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Refresh Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"refresh_token\": \"{{refresh_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/refresh",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "refresh"]
+						}
+					}
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/logout",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "logout"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Jobs",
+			"item": [
+				{
+					"name": "Submit Job (202 Accepted & Idempotent)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Idempotency-Key",
+								"value": "custom-idemp-12345"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"type\": \"email.send\",\n    \"payload\": {\n        \"to\": \"client@example.com\",\n        \"subject\": \"Welcome!\"\n    },\n    \"priority\": 5,\n    \"max_attempts\": 3\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/jobs",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "jobs"]
+						}
+					}
+				},
+				{
+					"name": "List Jobs",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/jobs?status=queued&limit=20&offset=0",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "jobs"],
+							"query": [
+								{
+									"key": "status",
+									"value": "queued"
+								},
+								{
+									"key": "limit",
+									"value": "20"
+								},
+								{
+									"key": "offset",
+									"value": "0"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Job Details",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/jobs/{{job_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "jobs", "{{job_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Cancel Job",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/jobs/{{job_id}}/cancel",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "jobs", "{{job_id}}", "cancel"]
+						}
+					}
+				},
+				{
+					"name": "Retry Failed / DLQ Job",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/jobs/{{job_id}}/retry",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "jobs", "{{job_id}}", "retry"]
+						}
+					}
+				},
+				{
+					"name": "Get Job Event History",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/jobs/{{job_id}}/events",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "jobs", "{{job_id}}", "events"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "System Metrics",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/v1/metrics",
+					"host": ["{{base_url}}"],
+					"path": ["api", "v1", "metrics"]
+				}
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8080"
+		},
+		{
+			"key": "access_token",
+			"value": ""
+		},
+		{
+			"key": "refresh_token",
+			"value": ""
+		},
+		{
+			"key": "job_id",
+			"value": ""
+		}
+	]
+}
