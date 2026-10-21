@@ -107,7 +107,7 @@ A distributed backend platform built in Go that accepts asynchronous jobs throug
 docker compose up --build
 ```
 This starts:
-- **PostgreSQL 16** on port `5432`
+- **PostgreSQL 16** on port `3000`
 - **Redis 7** on port `6379`
 - **API Server** on port `8080`
 - **Worker 1** (Concurrency: 5)

@@ -34,7 +34,7 @@ func LoadConfig() *Config {
 	return &Config{
 		AppPort:            getEnv("PORT", "8080"),
 		AppEnv:             getEnv("APP_ENV", "development"),
-		DatabaseURL:        getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/distributed_jobs?sslmode=disable"),
+		DatabaseURL:        getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:3000/distributed_jobs?sslmode=disable"),
 		RedisAddr:          getEnv("REDIS_ADDR", "localhost:6379"),
 		RedisPassword:      getEnv("REDIS_PASSWORD", ""),
 		RedisDB:            getEnvAsInt("REDIS_DB", 0),
